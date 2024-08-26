@@ -231,6 +231,7 @@ use core::cmp;
 use core::marker::Sync;
 use core::mem;
 use core::ptr::{self, NonNull};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use memory_units::{size_of, ByteSize, Bytes, Pages, RoundUpTo, Words};
 use neighbors::Neighbors;
 
@@ -1141,16 +1142,26 @@ impl<'a> WeeAlloc<'a> {
     }
 }
 
+pub const ALLOCATED: AtomicUsize = AtomicUsize::new(0);
+
 #[cfg(feature = "nightly")]
 unsafe impl<'a, 'b> Alloc for &'b WeeAlloc<'a>
 where
     'a: 'b,
 {
     unsafe fn alloc(&mut self, layout: Layout) -> Result<NonNull<u8>, AllocErr> {
+        let size = layout.size();
+        let align = layout.align();
+        let total_size = (size / align + if size % align != 0 { 1 } else { 0 }) * size;
+        ALLOCATED.fetch_add(total_size, Ordering::Acquire);
         self.alloc_impl(layout)
     }
 
     unsafe fn dealloc(&mut self, ptr: NonNull<u8>, layout: Layout) {
+        let size = layout.size();
+        let align = layout.align();
+        let total_size = (size / align + if size % align != 0 { 1 } else { 0 }) * size;
+        ALLOCATED.fetch_sub(total_size, Ordering::Acquire);
         self.dealloc_impl(ptr, layout)
     }
 }
