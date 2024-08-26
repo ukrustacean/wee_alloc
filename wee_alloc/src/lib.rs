@@ -231,7 +231,7 @@ use core::cmp;
 use core::marker::Sync;
 use core::mem;
 use core::ptr::{self, NonNull};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicUsize, Ordering};
 use memory_units::{size_of, ByteSize, Bytes, Pages, RoundUpTo, Words};
 use neighbors::Neighbors;
 
