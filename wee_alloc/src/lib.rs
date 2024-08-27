@@ -185,6 +185,7 @@ extern crate core;
 extern crate spin;
 
 extern crate memory_units;
+extern crate log;
 
 #[macro_use]
 mod extra_assert;
@@ -232,6 +233,7 @@ use core::marker::Sync;
 use core::mem;
 use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicUsize, Ordering};
+use log::info;
 use memory_units::{size_of, ByteSize, Bytes, Pages, RoundUpTo, Words};
 use neighbors::Neighbors;
 
@@ -1178,5 +1180,23 @@ unsafe impl GlobalAlloc for WeeAlloc<'static> {
         if let Some(ptr) = NonNull::new(ptr) {
             self.dealloc_impl(ptr, layout);
         }
+    }
+
+    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        info!("Before error!");
+        // SAFETY: the caller must ensure that the `new_size` does not overflow.
+        // `layout.align()` comes from a `Layout` and is thus guaranteed to be valid.
+        let new_layout = unsafe { Layout::from_size_align_unchecked(new_size, layout.align()) };
+        // SAFETY: the caller must ensure that `new_layout` is greater than zero.
+        let new_ptr = unsafe { self.alloc(new_layout) };
+        if !new_ptr.is_null() {
+            // SAFETY: the previously allocated block cannot overlap the newly allocated block.
+            // The safety contract for `dealloc` must be upheld by the caller.
+            unsafe {
+                ptr::copy_nonoverlapping(ptr, new_ptr, cmp::min(layout.size(), new_size));
+                self.dealloc(ptr, layout);
+            }
+        }
+        new_ptr
     }
 }
